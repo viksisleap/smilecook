@@ -25,10 +25,12 @@ class RecipeListResource(Resource):
                         num_of_servings=data['num_of_servings'],
                         cook_time=data['cook_time'],
                         directions=data['directions'])
+        #print(recipe.name)
 
         recipe_list.append(recipe)
-
-        return recipe.data, HTTPStatus.CREATED
+        #!!!
+        #return recipe.data, HTTPStatus.CREATED
+        return HTTPStatus.CREATED
 
 
 class RecipeResource(Resource):
