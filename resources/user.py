@@ -8,6 +8,7 @@ from http import HTTPStatus
 from webargs import fields
 from webargs.flaskparser import use_kwargs
 
+from extensions import image_set
 from mailgun import MailgunApi
 from models.recipe import Recipe
 from models.user import User
@@ -15,14 +16,15 @@ from models.user import User
 from schemas.user import UserSchema
 from schemas.recipe import RecipeSchema
 
-from utils import generate_token, verify_token
+from utils import generate_token, verify_token, save_image
 
 user_schema = UserSchema()
 user_public_schema = UserSchema(exclude=('email', ))
+user_avatar_schema = UserSchema(only=('avatar_url', ))
 recipe_list_schema = RecipeSchema(many=True)
 
-mailgun = MailgunApi(domain=os.environ['MAILGUN_DOMAIN'],
-                     api_key=os.environ['MAILGUN_API_KEY'])
+mailgun = MailgunApi(domain='sandbox0d2cdcddc57c459083318ecfd9ebd475.mailgun.org',
+                     api_key='3a6b1e1cd54f488e789f22690bcf6aae-3d0809fb-8a8900ba')
 
 class UserListResource(Resource):
     def post(self):
@@ -135,3 +137,31 @@ class UserActivateResource(Resource):
         user.save()
 
         return {}, HTTPStatus.NO_CONTENT
+
+
+class UserAvatarUploadResource(Resource):
+
+    @jwt_required
+    def put(self):
+
+        file = request.files.get('avatar')
+
+        if not file:
+            return {'message': 'Not a valid image'}, HTTPStatus.BAD_REQUEST
+
+        if not image_set.file_allowed(file, file.filename):
+            return {'message': 'File type not allowed'}, HTTPStatus.BAD_REQUEST
+
+        user = User.get_by_id(id=get_jwt_identity())
+
+        if user.avatar_image:
+            avatar_path = image_set.path(folder='avatars', filename=user.avatar_image)
+            if os.path.exists(avatar_path):
+                os.remove(avatar_path)
+
+        filename = save_image(image=file, folder='avatars')
+
+        user.avatar_image = filename
+        user.save()
+
+        return user_avatar_schema.dump(user).data, HTTPStatus.OK
