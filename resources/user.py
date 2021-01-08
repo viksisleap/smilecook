@@ -14,7 +14,7 @@ from models.recipe import Recipe
 from models.user import User
 
 from schemas.user import UserSchema
-from schemas.recipe import RecipeSchema
+from schemas.recipe import RecipeSchema, RecipePaginationSchema
 
 from utils import generate_token, verify_token, save_image
 
@@ -22,6 +22,7 @@ user_schema = UserSchema()
 user_public_schema = UserSchema(exclude=('email', ))
 user_avatar_schema = UserSchema(only=('avatar_url', ))
 recipe_list_schema = RecipeSchema(many=True)
+recipe_pagination_schema = RecipePaginationSchema()
 
 mailgun = MailgunApi(domain='sandbox0d2cdcddc57c459083318ecfd9ebd475.mailgun.org',
                      api_key='3a6b1e1cd54f488e789f22690bcf6aae-3d0809fb-8a8900ba')
@@ -95,8 +96,10 @@ class MeResource(Resource):
 class UserRecipeListResource(Resource):
 
     @jwt_optional
-    @use_kwargs({'visibility': fields.Str(missing='public')})
-    def get(self, username, visibility):
+    @use_kwargs({'page': fields.Int(missing=1),
+                 'per_page': fields.Int(missing=10),
+                 'visibility': fields.Str(missing='public')})
+    def get(self, username, page, per_page, visibility):
 
         user = User.get_by_username(username=username)
 
@@ -110,9 +113,9 @@ class UserRecipeListResource(Resource):
         else:
             visibility = 'public'
 
-        recipes = Recipe.get_all_by_user(user_id=user.id, visibility=visibility)
+        paginated_recipes = Recipe.get_all_by_user(user_id=user.id, page=page, per_page=per_page, visibility=visibility)
 
-        return recipe_list_schema.dump(recipes).data, HTTPStatus.OK
+        return recipe_pagination_schema.dump(paginated_recipes).data, HTTPStatus.OK
 
 
 class UserActivateResource(Resource):
