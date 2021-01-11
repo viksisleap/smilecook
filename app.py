@@ -1,10 +1,12 @@
-from flask import Flask
+import os
+
+from flask import Flask, request
 from flask_migrate import Migrate
 from flask_restful import Api
 from flask_uploads import configure_uploads, patch_request_class
 
 from config import Config
-from extensions import db, jwt, image_set
+from extensions import db, jwt, image_set, cache, limiter
 
 
 from resources.user import UserListResource, UserResource, MeResource, UserRecipeListResource, UserActivateResource, UserAvatarUploadResource
@@ -13,8 +15,17 @@ from resources.recipe import RecipeListResource, RecipeResource, RecipePublishRe
 
 
 def create_app():
+    env = os.environ.get('ENV', 'Development')
+
+    if env == 'Production':
+        config_str = 'config.ProductionConfig'
+    elif env == 'Staging':
+        config_str = 'config.StagingConfig'
+    else:
+        config_str = 'config.DevelopmentConfig'
+
     app = Flask(__name__)
-    app.config.from_object(Config)
+    app.config.from_object(config_str)
 
     register_extensions(app)
     register_resources(app)
@@ -28,12 +39,30 @@ def register_extensions(app):
     jwt.init_app(app)
     configure_uploads(app, image_set)
     patch_request_class(app, 10 * 1024 * 1024)
+    cache.init_app(app)
+    limiter.init_app(app)
 
     @jwt.token_in_blacklist_loader
     def check_if_token_in_blacklist(decrypted_token):
         jti = decrypted_token['jti']
         return jti in black_list
 
+    @limiter.request_filter
+    def ip_whitelist():
+        return request.remote_addr == '127.0.0.1'
+
+    @app.before_request
+    def before_request():
+        print('\n==================== BEFORE REQUEST ====================\n')
+        print(cache.cache._cache.keys())
+        print('\n=======================================================\n')
+
+    @app.after_request
+    def after_request(response):
+        print('\n==================== AFTER REQUEST ====================\n')
+        print(cache.cache._cache.keys())
+        print('\n=======================================================\n')
+        return response
 
 def register_resources(app):
     api = Api(app)
